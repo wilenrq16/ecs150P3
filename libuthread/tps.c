@@ -18,7 +18,8 @@ queue_t library = NULL;
 
 typedef struct TPSB {
 	pthread_t tid; 
-	void* tps;
+	char* tps;
+	tps = NULL;
 } TPSB;
 
 typedef struct TPSB* tpsb_t;
@@ -68,6 +69,37 @@ int tps_write(size_t offset, size_t length, char *buffer)
 int tps_clone(pthread_t tid)
 {
 	// call tps_create() to make new TPS, copy content from target thread's TPS w/memcpy()
+	void* holderThing;
+	pthread_t tidHolder;
+
+	tps_create();
+	queue_func_t func = &find_TID;
+	queue_iterate(library, func, tid, &holderThing);
+	tpsb_t mytpsb = *holderThing;
+	
+	tidHolder = pthread_self();
+	queue_iterate(library, func, tidHolder, &holderThing);
+	tpsb_t calling_tpsb = *holderThing;
+
+	if (mytpsb->tps == NULL || calling_tpsb->tps != NULL)
+		return -1;
+
+	memcpy((void*)calling_tpsb, (const void*)mytpsb->tps, TPS_SIZE);
+
 	return 0;
 }
+
+static int find_TID(queue_t library, void* block, void* arg)
+{
+
+        struct TPSB *cur = (struct TPSB*) block;
+	pthread_t checkTID = (pthread_t) arg;
+        if(cur->tid == TID)
+                return 1;
+
+        return 0;
+
+}
+
+
 
