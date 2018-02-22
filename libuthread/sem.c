@@ -44,7 +44,6 @@ int sem_down(sem_t sem)
 	}	
 	if (sem->value == 1)
 		sem->value -= 1;
-	// Take resource from sem??
 	exit_critical_section();
 	return 0;
 }
@@ -60,8 +59,7 @@ int sem_up(sem_t sem)
 		void* holderThing;
 		queue_dequeue(sem->queue, &holderThing); 
 		thread_unblock(*((pthread_t*)holderThing));
-	}
-	// Release resource, give to sem??	
+	}	
 	exit_critical_section();
 	return 0; 
 }
