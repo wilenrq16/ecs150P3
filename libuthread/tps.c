@@ -16,13 +16,24 @@ queue_t library = NULL;
 #define OFFSET 0
 #define FD -1
 
-typedef struct TPSB {
+struct TPSB {
 	pthread_t tid; 
-	char* tps;
-	tps = NULL;
-} TPSB;
+	char *tps;
+};
 
 typedef struct TPSB* tpsb_t;
+
+int find_TID(queue_t library, void* block, void* arg)
+{
+
+        tpsb_t cur = (tpsb_t) block;
+        pthread_t checkTID = (intptr_t)arg;
+        if(cur->tid == checkTID)
+                return 1;
+
+        return 0;
+
+}
 
 int tps_init(int segv)
 {
@@ -52,54 +63,71 @@ int tps_create(void)
 }
 
 int tps_destroy(void)
-{
+{	
+	void* holderThing; 
+        pthread_t tidHolder = pthread_self();
+        queue_func_t func = &find_TID;
+        int check;
+
+	check = queue_iterate(library, func, (void*)&tidHolder, &holderThing);
+        if (check == -1)
+                return -1;
+	queue_delete(library,(tpsb_t)holderThing);
 	return 0;
 }
 
 int tps_read(size_t offset, size_t length, char *buffer)
 {
+	enter_critical_section();
+
+	
+
+
+	exit_critical_section();
 	return 0;
 }
 
 int tps_write(size_t offset, size_t length, char *buffer)
 {
+	enter_critical_section();
+
+
+
+
+	exit_critical_section();
 	return 0;
 }
 
 int tps_clone(pthread_t tid)
 {
+	 enter_critical_section();
+
 	// call tps_create() to make new TPS, copy content from target thread's TPS w/memcpy()
 	void* holderThing;
 	pthread_t tidHolder;
-
-	tps_create();
 	queue_func_t func = &find_TID;
-	queue_iterate(library, func, tid, &holderThing);
-	tpsb_t mytpsb = *holderThing;
-	
 	tidHolder = pthread_self();
-	queue_iterate(library, func, tidHolder, &holderThing);
-	tpsb_t calling_tpsb = *holderThing;
+	int check;
+	
+	// if next q_iterate fails, thread with tid as argument has no TPSB or tps...
+	check = queue_iterate(library, func,(void*)&tid, &holderThing);
+	if (check == -1)
+		return -1;
+	tpsb_t mytpsb = (tpsb_t)holderThing;
 
-	if (mytpsb->tps == NULL || calling_tpsb->tps != NULL)
+	// if next q_iterate does not fail, calling thread alerady has TPSB with tps...
+	check = queue_iterate(library, func, (void*)&tidHolder, &holderThing);
+	if (check != -1)
 		return -1;
 
-	memcpy((void*)calling_tpsb, (const void*)mytpsb->tps, TPS_SIZE);
+	tps_create();
+	queue_iterate(library, func, (void*)&tidHolder, &holderThing);
+	tpsb_t calling_tpsb = (tpsb_t)holderThing;
 
+	memcpy((void*)calling_tpsb->tps, (const void*)mytpsb->tps, TPS_SIZE);
+	
+	exit_critical_section();
 	return 0;
 }
-
-static int find_TID(queue_t library, void* block, void* arg)
-{
-
-        struct TPSB *cur = (struct TPSB*) block;
-	pthread_t checkTID = (pthread_t) arg;
-        if(cur->tid == TID)
-                return 1;
-
-        return 0;
-
-}
-
 
 
