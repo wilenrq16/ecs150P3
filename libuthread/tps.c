@@ -15,6 +15,7 @@
 queue_t library = NULL;
 #define OFFSET 0
 #define FD -1
+#define NA -2 //"Not Applicable"
 
 struct TPSB {
 	pthread_t tid; 
@@ -38,7 +39,7 @@ int getTPS(void* tpsHolder, pthread_t tid)
 {
         pthread_t tidHolder = pthread_self();
         queue_func_t func = &find_TID;
-        if (tid == NULL)
+        if (tid == NA)
 	{
 		int check = queue_iterate(library, func, (void*)&tidHolder, &tpsHolder);
 		if (check == -1)
@@ -85,8 +86,8 @@ int tps_create(void)
 
 int tps_destroy(void)
 {	
-	void* tpsHolder;
-	int check = getTPS(tpsHolder, NULL);
+	void* tpsHolder = NULL;
+	int check = getTPS(tpsHolder, NA);
         if (check == -1)
                 return -1;
 
@@ -97,8 +98,8 @@ int tps_destroy(void)
 int tps_read(size_t offset, size_t length, char *buffer)
 {
 	enter_critical_section();
-	void* tpsHolder;
-        int check = getTPS(tpsHolder, NULL);
+	void* tpsHolder = NULL;
+        int check = getTPS(tpsHolder, NA);
         if (check == -1 || buffer == NULL || offset + length > TPS_SIZE)
                 return -1;
 	tpsb_t calling_tpsb = (tpsb_t)tpsHolder;
@@ -111,8 +112,8 @@ int tps_read(size_t offset, size_t length, char *buffer)
 int tps_write(size_t offset, size_t length, char *buffer)
 {
 	enter_critical_section();
-	void* tpsHolder;
-        int check = getTPS(tpsHolder, NULL);
+	void* tpsHolder = NULL;
+        int check = getTPS(tpsHolder, NA);
         if (check == -1 || buffer == NULL || offset + length > TPS_SIZE)
                 return -1;
 	tpsb_t calling_tpsb = (tpsb_t)tpsHolder;
@@ -127,8 +128,8 @@ int tps_clone(pthread_t tid)
 	 enter_critical_section();
 
 	// call tps_create() to make new TPS, copy content from target thread's TPS w/memcpy()
-	void* toBeClnd;
-	void* wantsToCln;
+	void* toBeClnd = NULL;
+	void* wantsToCln = NULL;
 	int check;
 	
 	// if next q_iterate fails, thread with tid as argument has no TPSB or tps...
@@ -138,12 +139,12 @@ int tps_clone(pthread_t tid)
 	tpsb_t toBeClndCstd = (tpsb_t)toBeClnd;
 
 	// if next q_iterate does not fail, calling thread alerady has TPSB with tps...
-	check = getTPS(wantsToCln, NULL);
+	check = getTPS(wantsToCln, NA);
 	if (check != -1)
 		return -1;
 
 	tps_create();
-	check = getTPS(wantsToCln, NULL);
+	check = getTPS(wantsToCln, NA);
 	if (check == -1)
 		return -1;
 	tpsb_t wantsToClnCstd = (tpsb_t)wantsToCln;
