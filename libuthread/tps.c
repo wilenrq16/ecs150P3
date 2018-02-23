@@ -67,11 +67,10 @@ int tps_destroy(void)
 	void* holderThing; 
         pthread_t tidHolder = pthread_self();
         queue_func_t func = &find_TID;
-        int check;
-
-	check = queue_iterate(library, func, (void*)&tidHolder, &holderThing);
+        int check = queue_iterate(library, func, (void*)&tidHolder, &holderThing);
         if (check == -1)
                 return -1;
+
 	queue_delete(library,(tpsb_t)holderThing);
 	return 0;
 }
@@ -79,10 +78,17 @@ int tps_destroy(void)
 int tps_read(size_t offset, size_t length, char *buffer)
 {
 	enter_critical_section();
-
-	
-
-
+	void* holderThing;
+        pthread_t tidHolder = pthread_self();
+        queue_func_t func = &find_TID;
+        int check = queue_iterate(library, func, (void*)&tidHolder, &holderThing);
+        if (check == -1 || buffer == NULL || offset + length > TPS_SIZE)
+                return -1;
+	tpsb_t calling_tpsb = (tpsb_t)holderThing;
+	for (int i = offset; i < offset + length; i++)
+	{
+		buffer[i] = calling_tpsb->tps[i];
+	}
 	exit_critical_section();
 	return 0;
 }
@@ -90,10 +96,17 @@ int tps_read(size_t offset, size_t length, char *buffer)
 int tps_write(size_t offset, size_t length, char *buffer)
 {
 	enter_critical_section();
-
-
-
-
+	void* holderThing;
+        pthread_t tidHolder = pthread_self();
+        queue_func_t func = &find_TID;
+        int check = queue_iterate(library, func, (void*)&tidHolder, &holderThing);
+        if (check == -1 || buffer == NULL || offset + length > TPS_SIZE)
+                return -1;
+	tpsb_t calling_tpsb = (tpsb_t)holderThing;
+        for (int i = offset; i < offset + length; i++)
+        {
+                calling_tpsb->tps[i] = buffer[i];
+        }
 	exit_critical_section();
 	return 0;
 }
