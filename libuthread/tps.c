@@ -28,12 +28,21 @@ typedef struct TPSB* tpsb_t;
 int find_TID(queue_t library, void* block, void* arg)
 {
 
-        tpsb_t cur = (tpsb_t) block;
+        tpsb_t cur = (tpsb_t)block;
         pthread_t checkTID = (intptr_t)arg;
         if(cur->tid == checkTID)
                 return 1;
 
         return 0;
+}
+
+int find_TPS(queue_t library, void* block, void* arg)
+{
+	tpsb_t cur = (tpsb_t)block;
+	char* checkTPS = (char*)arg;
+	if (cur->tps == checkTPS)
+		return -1;
+	return 0;
 }
 
 int getTPS(void* tpsHolder, pthread_t tid)
@@ -58,25 +67,26 @@ int getTPS(void* tpsHolder, pthread_t tid)
 
 void segv_handler(int sig, siginfo_t *si, void *context)
 {
-    /*
-     * Get the address corresponding to the beginning of the page where the
-     * fault occurred
-     */
-    void *p_fault = (void*)((uintptr_t)si->si_addr & ~(TPS_SIZE - 1));
+	/*
+	* Get the address corresponding to the beginning of the page where the
+	* fault occurred
+	*/
+	void* tpsHolder;
+	void* p_fault = (void*)((uintptr_t)si->si_addr & ~(TPS_SIZE - 1));
 
-    /*
-     * Iterate through all the TPS areas and find if p_fault matches one of them
-     */
-   
-    if (/* There is a match */)
+	queue_func_t func = &find_TPS;	    
+	queue_iterate(library, func, p_fault, &tpsHolder);
+	tpsb_t potentialM = (tpsb_t)tpsHolder;
+ 
+	if (potentialM->tps == (char*)p_fault)
         /* Printf the following error message */
         fprintf(stderr, "TPS protection error!\n");
 
-    /* In any case, restore the default signal handlers */
-    signal(SIGSEGV, SIG_DFL);
-    signal(SIGBUS, SIG_DFL);
-    /* And transmit the signal again in order to cause the program to crash */
-    raise(sig);
+	/* In any case, restore the default signal handlers */
+	signal(SIGSEGV, SIG_DFL);
+	signal(SIGBUS, SIG_DFL);
+	/* And transmit the signal again in order to cause the program to crash */
+	raise(sig);
 }
 
 int tps_init(int segv)
