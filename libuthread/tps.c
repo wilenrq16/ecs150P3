@@ -50,7 +50,7 @@ int getTPS(void* tpsHolder, pthread_t tid)
 		return -1;
  
 	tpsb_t myTps = (tpsb_t)tpsHolder;
-	if (myTps->tid != tidHolder)
+	if (myTps->tid != tidHolder) // SEG FAULT OCCURS HERE
 		return -1;
 	return 0; 
 }
@@ -61,7 +61,7 @@ int tps_init(int segv)
 {
 	if (library == NULL)
 	{
-	// Maybe make a queue to hold TPS objects? 
+	// Create a queue to hold tpsb_t objects? 
 	queue_t queue = queue_create();
 	if (queue == NULL)
 		return -1;
@@ -73,8 +73,8 @@ int tps_init(int segv)
 
 int tps_create(void)
 {
-	// Maybe make TPS object, associate to thread with TID, and store in queue?
-	// Use mmap(); memory page needs to be private, anonymous, accessible in read& writes
+	// Create tps_b object, associate to thread with TID, and store in queue?
+	// Uses mmap(); memory page is set to private, anonymous, accessible in read and writes
  	tpsb_t tpsb = (tpsb_t)malloc(sizeof(struct TPSB));
 	tpsb->tid = pthread_self();
 	tpsb->tps = mmap(NULL, TPS_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, FD, OFFSET); 
@@ -86,12 +86,15 @@ int tps_create(void)
 
 int tps_destroy(void)
 {	
+	enter_critical_section();
 	void* tpsHolder = NULL;
 	int check = getTPS(tpsHolder, NA);
         if (check == -1)
                 return -1;
-
-	queue_delete(library,(tpsb_t)tpsHolder);
+	tpsb_t toDel = (tpsb_t)tpsHolder;
+	free(toDel->tps);
+	queue_delete(library, toDel);
+	exit_critical_section();
 	return 0;
 }
 
@@ -132,13 +135,13 @@ int tps_clone(pthread_t tid)
 	void* wantsToCln = NULL;
 	int check;
 	
-	// if next q_iterate fails, thread with tid as argument has no TPSB or tps...
+	// if getTPS() fails, thread with tid as argument has no TPSB or tps...
 	check = getTPS(toBeClnd, tid);
 	if (check == -1)
 		return -1;
 	tpsb_t toBeClndCstd = (tpsb_t)toBeClnd;
 
-	// if next q_iterate does not fail, calling thread alerady has TPSB with tps...
+	// if getTPS() does not fail, calling thread alerady has TPSB with tps...
 	check = getTPS(wantsToCln, NA);
 	if (check != -1)
 		return -1;
