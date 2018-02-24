@@ -104,7 +104,7 @@ int tps_read(size_t offset, size_t length, char *buffer)
                 return -1;
 	tpsb_t calling_tpsb = (tpsb_t)tpsHolder;
 	
-	memcpy(buffer, calling_tpsb->tps + offset,length);
+	memcpy((void*)buffer, (const void*)&calling_tpsb->tps[offset], length);
 	exit_critical_section();
 	return 0;
 }
@@ -118,7 +118,7 @@ int tps_write(size_t offset, size_t length, char *buffer)
                 return -1;
 	tpsb_t calling_tpsb = (tpsb_t)tpsHolder;
         
-	memcpy(calling_tpsb->tps + offset, buffer, length);
+	memcpy((void*)&calling_tpsb->tps[offset], (const void*)buffer, length);
 	exit_critical_section();
 	return 0;
 }
@@ -149,7 +149,7 @@ int tps_clone(pthread_t tid)
 		return -1;
 	tpsb_t wantsToClnCstd = (tpsb_t)wantsToCln;
 
-	memcpy((void*)wantsToClnCstd->tps, (const void*)toBeClndCstd->tps, TPS_SIZE*sizeof(char));
+	memcpy((void*)wantsToClnCstd->tps, (const void*)toBeClndCstd->tps, TPS_SIZE);
 	
 	exit_critical_section();
 	return 0;

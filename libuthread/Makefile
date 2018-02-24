@@ -12,6 +12,7 @@ sem.o: sem.c sem.h
 tps.o: tps.c tps.h 
 	gcc $(CFLAGS) $< -c 
 
-clean: rm -rf $(lib) sem.o tps.o 
+clean: 
+	rm -rf $(lib) sem.o tps.o 
 
 
