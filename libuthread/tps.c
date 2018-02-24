@@ -7,7 +7,6 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
-
 #include "queue.h"
 #include "thread.h"
 #include "tps.h"
@@ -17,6 +16,8 @@ queue_t library = NULL;
 #define FD -1
 #define NA -2 //"Not Applicable"
 
+/* Struct to house a thread's tid and TPS Page. 
+Pointers to this type are library stored (enqueued). */
 struct TPSB {
 	pthread_t tid; 
 	char *tps;
@@ -55,18 +56,49 @@ int getTPS(void* tpsHolder, pthread_t tid)
 	return 0; 
 }
 
+void segv_handler(int sig, siginfo_t *si, void *context)
+{
+    /*
+     * Get the address corresponding to the beginning of the page where the
+     * fault occurred
+     */
+    void *p_fault = (void*)((uintptr_t)si->si_addr & ~(TPS_SIZE - 1));
 
+    /*
+     * Iterate through all the TPS areas and find if p_fault matches one of them
+     */
+   
+    if (/* There is a match */)
+        /* Printf the following error message */
+        fprintf(stderr, "TPS protection error!\n");
+
+    /* In any case, restore the default signal handlers */
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGBUS, SIG_DFL);
+    /* And transmit the signal again in order to cause the program to crash */
+    raise(sig);
+}
 
 int tps_init(int segv)
 {
 	if (library == NULL)
 	{
-	// Create a queue to hold tpsb_t objects? 
-	queue_t queue = queue_create();
-	if (queue == NULL)
-		return -1;
-	library = queue; 
-	return 0; 
+		if (segv) 
+		{
+        		struct sigaction sa;
+
+        		sigemptyset(&sa.sa_mask);
+        		sa.sa_flags = SA_SIGINFO;
+        		sa.sa_sigaction = segv_handler;
+        		sigaction(SIGBUS, &sa, NULL);
+        		sigaction(SIGSEGV, &sa, NULL);
+    		}
+		// Creatse a queue library to hold tpsb_t objects 
+		queue_t queue = queue_create();
+		if (queue == NULL)
+			return -1;
+		library = queue; 
+		return 0; 
 	}
 	return -1;
 }
@@ -74,10 +106,10 @@ int tps_init(int segv)
 int tps_create(void)
 {
 	// Create tps_b object, associate to thread with TID, and store in queue?
-	// Uses mmap(); memory page is set to private, anonymous, accessible in read and writes
+	// Memory page is set to private, anonymous, and w/o read/write permissions
  	tpsb_t tpsb = (tpsb_t)malloc(sizeof(struct TPSB));
 	tpsb->tid = pthread_self();
-	tpsb->tps = mmap(NULL, TPS_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, FD, OFFSET); 
+	tpsb->tps = mmap(NULL, TPS_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, FD, OFFSET); 
 	if (tpsb->tps == MAP_FAILED)
 		return -1;
 	queue_enqueue(library, tpsb);
@@ -100,14 +132,22 @@ int tps_destroy(void)
 
 int tps_read(size_t offset, size_t length, char *buffer)
 {
-	enter_critical_section();
+	enter_critical_section();	
 	void* tpsHolder = NULL;
         int check = getTPS(tpsHolder, NA);
-        if (check == -1 || buffer == NULL || offset + length > TPS_SIZE)
+	// Check to see if getTPS fails, buffer is null, or if read amount exceeds page
+        if (check == -1 || buffer == NULL || offset + length >= TPS_SIZE)
                 return -1;
 	tpsb_t calling_tpsb = (tpsb_t)tpsHolder;
-	
+	// Change read permissions
+        check =  mprotect((void*)&calling_tpsb->tps[offset], length, PROT_READ);
+	if (check == -1)
+		return -1; 
 	memcpy((void*)buffer, (const void*)&calling_tpsb->tps[offset], length);
+	// Change permissions back 
+	check = mprotect((void*)&calling_tpsb->tps[offset], length, PROT_NONE);
+	if (check == -1)
+		return -1; 
 	exit_critical_section();
 	return 0;
 }
@@ -117,11 +157,19 @@ int tps_write(size_t offset, size_t length, char *buffer)
 	enter_critical_section();
 	void* tpsHolder = NULL;
         int check = getTPS(tpsHolder, NA);
-        if (check == -1 || buffer == NULL || offset + length > TPS_SIZE)
+	// Check to see if getTPS fails, buffer is null, or if write amount exceeds page
+        if (check == -1 || buffer == NULL || offset + length >= TPS_SIZE)
                 return -1;
 	tpsb_t calling_tpsb = (tpsb_t)tpsHolder;
-        
+        // Change write permissions
+	check = mprotect((void*)&calling_tpsb->tps[offset], length, PROT_WRITE);
+	if (check == -1)
+		return -1;
 	memcpy((void*)&calling_tpsb->tps[offset], (const void*)buffer, length);
+	// Change permissions back 
+	check = mprotect((void*)&calling_tpsb->tps[offset], length, PROT_NONE);
+	if (check == -1)
+		return -1; 
 	exit_critical_section();
 	return 0;
 }
